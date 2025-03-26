@@ -1,22 +1,24 @@
 const crypto = require('crypto');
 const zlib = require('zlib');
+const fs = require('fs');
+const path = require('path');
 
-// ECDH (Elliptic Curve Diffie-Hellman) Key Generation
 function generateECDHKey() {
-    const ecdh = crypto.createECDH('secp256k1'); // You can also use 'prime256v1' for SECP256R1
+    const ecdh = crypto.createECDH('secp256k1');
     ecdh.generateKeys();
     const privateKey = ecdh.getPrivateKey();
-    const publicKey = ecdh.getPublicKey();
+    const publicKey = ecdh.getPublicKey(null, 'compressed'); // 33-byte public key
     return { privateKey, publicKey };
 }
 
-// Create shared secret from private key and peer's public key
+// Compute shared secret from private key and peer public key
 function ecdhSharedSecret(privateKey, peerPublicKey) {
     const ecdh = crypto.createECDH('secp256k1');
     ecdh.setPrivateKey(privateKey);
     const sharedSecret = ecdh.computeSecret(peerPublicKey);
-    return crypto.createHash('sha256').update(sharedSecret).digest();
+    return crypto.createHash('sha256').update(sharedSecret).digest(); // Derive a fixed 32-byte key
 }
+
 
 // AES-256-CTR Encryption
 function aes256CtrEncrypt(key, plaintext) {
@@ -65,6 +67,36 @@ function decompressData(data) {
     return zlib.inflateSync(data);
 }
 
+// File Compression using zlib
+function compressFile(inputFilePath, outputFilePath) {
+    const input = fs.createReadStream(inputFilePath);
+    const output = fs.createWriteStream(outputFilePath);
+    const gzip = zlib.createDeflate();
+    input.pipe(gzip).pipe(output);
+}
+
+// File Decompression using zlib
+function decompressFile(inputFilePath, outputFilePath) {
+    const input = fs.createReadStream(inputFilePath);
+    const output = fs.createWriteStream(outputFilePath);
+    const gunzip = zlib.createInflate();
+    input.pipe(gunzip).pipe(output);
+}
+
+// Encrypt a file using AES-256-GCM
+function encryptFile(key, inputFilePath, outputFilePath, associatedData = null) {
+    const input = fs.readFileSync(inputFilePath);
+    const encryptedData = aes256GcmEncrypt(key, input, associatedData);
+    fs.writeFileSync(outputFilePath, encryptedData);
+}
+
+// Decrypt a file using AES-256-GCM
+function decryptFile(key, inputFilePath, outputFilePath, associatedData = null) {
+    const encryptedData = fs.readFileSync(inputFilePath);
+    const decryptedData = aes256GcmDecrypt(key, encryptedData, associatedData);
+    fs.writeFileSync(outputFilePath, decryptedData);
+}
+
 // Example of a custom protocol class using the above methods
 class CustomProtocol {
     constructor() {
@@ -85,6 +117,22 @@ class CustomProtocol {
     decryptData(key, ciphertext) {
         const decryptedData = aes256GcmDecrypt(key, ciphertext);
         return decompressData(decryptedData);
+    }
+
+    encryptFile(key, inputFilePath, outputFilePath, associatedData = null) {
+        encryptFile(key, inputFilePath, outputFilePath, associatedData);
+    }
+
+    decryptFile(key, inputFilePath, outputFilePath, associatedData = null) {
+        decryptFile(key, inputFilePath, outputFilePath, associatedData);
+    }
+
+    compressFile(inputFilePath, outputFilePath) {
+        compressFile(inputFilePath, outputFilePath);
+    }
+
+    decompressFile(inputFilePath, outputFilePath) {
+        decompressFile(inputFilePath, outputFilePath);
     }
 }
 
