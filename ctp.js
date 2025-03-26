@@ -1,46 +1,46 @@
 const crypto = require('crypto');
 const zlib = require('zlib');
-const fs = require('fs');
 
-// Generating ECDH keys
-function generateEcdhKey() {
-    const ecdh = crypto.createECDH('secp256r1');
+// ECDH (Elliptic Curve Diffie-Hellman) Key Generation
+function generateECDHKey() {
+    const ecdh = crypto.createECDH('secp256k1'); // You can also use 'prime256v1' for SECP256R1
     ecdh.generateKeys();
-    return {
-        privateKey: ecdh.getPrivateKey(),
-        publicKey: ecdh.getPublicKey()
-    };
+    const privateKey = ecdh.getPrivateKey();
+    const publicKey = ecdh.getPublicKey();
+    return { privateKey, publicKey };
 }
 
-// Creating shared secret using ECDH
+// Create shared secret from private key and peer's public key
 function ecdhSharedSecret(privateKey, peerPublicKey) {
-    const ecdh = crypto.createECDH('secp256r1');
+    const ecdh = crypto.createECDH('secp256k1');
     ecdh.setPrivateKey(privateKey);
     const sharedSecret = ecdh.computeSecret(peerPublicKey);
     return crypto.createHash('sha256').update(sharedSecret).digest();
 }
 
-// AES-256-CTR encryption
+// AES-256-CTR Encryption
 function aes256CtrEncrypt(key, plaintext) {
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-ctr', key, iv);
-    const ciphertext = Buffer.concat([iv, cipher.update(plaintext), cipher.final()]);
-    return ciphertext;
+    let ciphertext = cipher.update(plaintext);
+    ciphertext = Buffer.concat([ciphertext, cipher.final()]);
+    return Buffer.concat([iv, ciphertext]);
 }
 
-// AES-256-GCM encryption
+// AES-256-GCM Encryption
 function aes256GcmEncrypt(key, plaintext, associatedData = null) {
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     if (associatedData) {
         cipher.setAAD(associatedData);
     }
-    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    let ciphertext = cipher.update(plaintext);
+    ciphertext = Buffer.concat([ciphertext, cipher.final()]);
     const tag = cipher.getAuthTag();
     return Buffer.concat([iv, tag, ciphertext]);
 }
 
-// AES-256-GCM decryption
+// AES-256-GCM Decryption
 function aes256GcmDecrypt(key, ciphertext, associatedData = null) {
     const iv = ciphertext.slice(0, 12);
     const tag = ciphertext.slice(12, 28);
@@ -50,26 +50,27 @@ function aes256GcmDecrypt(key, ciphertext, associatedData = null) {
     if (associatedData) {
         decipher.setAAD(associatedData);
     }
-    const plaintext = Buffer.concat([decipher.update(data), decipher.final()]);
+    let plaintext = decipher.update(data);
+    plaintext = Buffer.concat([plaintext, decipher.final()]);
     return plaintext;
 }
 
-// Data compression using zlib
+// Data Compression using zlib
 function compressData(data) {
     return zlib.deflateSync(data);
 }
 
-// Data decompression using zlib
+// Data Decompression using zlib
 function decompressData(data) {
     return zlib.inflateSync(data);
 }
 
-// Cryptmanx class with file encryption support
-class Cryptmanx {
+// Example of a custom protocol class using the above methods
+class CustomProtocol {
     constructor() {
-        const keys = generateEcdhKey();
-        this.privateKey = keys.privateKey;
-        this.publicKey = keys.publicKey;
+        const { privateKey, publicKey } = generateECDHKey();
+        this.privateKey = privateKey;
+        this.publicKey = publicKey;
     }
 
     keyExchange(peerPublicKey) {
@@ -85,22 +86,6 @@ class Cryptmanx {
         const decryptedData = aes256GcmDecrypt(key, ciphertext);
         return decompressData(decryptedData);
     }
-
-    // Encrypt a file
-    encryptFile(key, inputFilePath, outputFilePath) {
-        const inputFile = fs.readFileSync(inputFilePath);
-        const encryptedData = this.encryptData(key, inputFile);
-        fs.writeFileSync(outputFilePath, encryptedData);
-        console.log(`File encrypted successfully: ${outputFilePath}`);
-    }
-
-    // Decrypt a file
-    decryptFile(key, inputFilePath, outputFilePath) {
-        const encryptedData = fs.readFileSync(inputFilePath);
-        const decryptedData = this.decryptData(key, encryptedData);
-        fs.writeFileSync(outputFilePath, decryptedData);
-        console.log(`File decrypted successfully: ${outputFilePath}`);
-    }
 }
 
-module.exports = Cryptmanx;
+module.exports = CustomProtocol;
