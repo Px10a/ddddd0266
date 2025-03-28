@@ -1,6 +1,6 @@
 const net = require('net');
 const readline = require('readline');
-const { CustomProtocol, KeyHelper } = require('./cryptoProtocol'); // Assuming the provided code is saved in cryptoProtocol.js
+const { CustomProtocol, KeyHelper } = require('./index'); // Assuming the provided code is saved in cryptoProtocol.js
 
 const rl = readline.createInterface({
     input: process.stdin,
