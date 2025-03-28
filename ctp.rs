@@ -4,8 +4,9 @@ use openssl::symm::Mode;
 use openssl::ec::{EcKey, EcGroup};
 use openssl::pkey::PKey;
 use openssl::hash::MessageDigest;
-use rand::Rng;
+use hmac::{Hmac, Mac};
 use sha2::{Sha256, Digest};
+use rand::Rng;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use flate2::{Compression, write::GzEncoder, read::GzDecoder};
@@ -42,6 +43,12 @@ fn ecdh_shared_secret(private_key: &EcKey, peer_public_key: &EcKey) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
+fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC can take key of any size");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
+
 struct SealedSender {
     private_key: EcKey,
     public_key: EcKey,
@@ -57,67 +64,71 @@ impl SealedSender {
         ecdh_shared_secret(&self.private_key, peer_public_key)
     }
 
-    fn encrypt_data(&self, key: &[u8], data: &[u8]) -> Vec<u8> {
+    fn encrypt_data(&self, key: &[u8], data: &[u8]) -> (Vec<u8>, Vec<u8>) {
         let mut rng = rand::thread_rng();
         let mut iv = [0u8; 16];
         rng.fill(&mut iv);
-        aes_256_ige_encrypt_py(key.to_vec(), data.to_vec(), iv.to_vec())
+        let ciphertext = aes_256_ige_encrypt_py(key.to_vec(), data.to_vec(), iv.to_vec());
+
+        // Generate HMAC for integrity check
+        let hmac = hmac_sha256(key, &ciphertext);
+
+        (ciphertext, hmac)
     }
 
-    fn decrypt_data(&self, key: &[u8], ciphertext: &[u8]) -> Vec<u8> {
-        let mut rng = rand::thread_rng();
-        let mut iv = [0u8; 16];
-        rng.fill(&mut iv);
+    fn decrypt_data(&self, key: &[u8], ciphertext: &[u8], hmac: &[u8], iv: &[u8]) -> Vec<u8> {
+        // Verify HMAC for integrity
+        let computed_hmac = hmac_sha256(key, &ciphertext);
+        if computed_hmac != hmac {
+            panic!("HMAC mismatch! Data integrity compromised.");
+        }
+
+        // Decrypt the data
         aes_256_ige_decrypt_py(key.to_vec(), ciphertext.to_vec(), iv.to_vec())
     }
 
-    // File encryption and compression
-    fn encrypt_file(&self, key: &[u8], input_file: &str, output_file: &str) {
+    // Encrypt and write metadata alongside data
+    fn encrypt_file_with_metadata(&self, key: &[u8], input_file: &str, output_file: &str, metadata: &[u8]) {
         let mut input = File::open(input_file).unwrap();
         let mut data = Vec::new();
         input.read_to_end(&mut data).unwrap();
 
-        // Compress data before encryption
-        let compressed_data = self.compress_data(&data);
+        // Encrypt metadata
+        let metadata_encrypted = aes_256_ige_encrypt_py(key.to_vec(), metadata.to_vec(), vec![0; 16]);
 
-        // Encrypt the compressed data
-        let encrypted_data = self.encrypt_data(key, &compressed_data);
+        // Encrypt the data
+        let (encrypted_data, hmac) = self.encrypt_data(key, &data);
 
-        // Write encrypted data to the output file
+        // Write the encrypted metadata and data to the output file
         let mut output = File::create(output_file).unwrap();
-        output.write_all(&encrypted_data).unwrap();
+        output.write_all(&metadata_encrypted).unwrap();  // Write encrypted metadata first
+        output.write_all(&hmac).unwrap();                // Write HMAC of the data
+        output.write_all(&encrypted_data).unwrap();     // Write encrypted data
     }
 
-    // File decryption and decompression
-    fn decrypt_file(&self, key: &[u8], input_file: &str, output_file: &str) {
+    // Decrypt file and extract metadata
+    fn decrypt_file_with_metadata(&self, key: &[u8], input_file: &str, output_file: &str) {
         let mut input = File::open(input_file).unwrap();
+        let mut encrypted_metadata = vec![0; 16];  // Assuming metadata is 16 bytes
+        let mut hmac = vec![0; 32];                // HMAC-SHA256 is 32 bytes
         let mut encrypted_data = Vec::new();
+
+        input.read_exact(&mut encrypted_metadata).unwrap();
+        input.read_exact(&mut hmac).unwrap();
         input.read_to_end(&mut encrypted_data).unwrap();
 
-        // Decrypt the file content
-        let decrypted_data = self.decrypt_data(key, &encrypted_data);
+        // Decrypt metadata
+        let metadata = aes_256_ige_decrypt_py(key.to_vec(), encrypted_metadata, vec![0; 16]);
 
-        // Decompress data after decryption
-        let decompressed_data = self.decompress_data(&decrypted_data);
+        // Decrypt data and verify integrity using HMAC
+        let decrypted_data = self.decrypt_data(key, &encrypted_data, &hmac, &vec![0; 16]);
 
-        // Write decompressed data to the output file
+        // Write decrypted data to the output file
         let mut output = File::create(output_file).unwrap();
-        output.write_all(&decompressed_data).unwrap();
-    }
+        output.write_all(&decrypted_data).unwrap();
 
-    // Compression (Gzip)
-    fn compress_data(&self, data: &[u8]) -> Vec<u8> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-        encoder.write_all(data).unwrap();
-        encoder.finish().unwrap()
-    }
-
-    // Decompression (Gzip)
-    fn decompress_data(&self, data: &[u8]) -> Vec<u8> {
-        let mut decoder = GzDecoder::new(data);
-        let mut decompressed_data = Vec::new();
-        decoder.read_to_end(&mut decompressed_data).unwrap();
-        decompressed_data
+        // Optionally, return the metadata
+        println!("Decrypted metadata: {:?}", metadata);
     }
 }
 
