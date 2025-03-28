@@ -1,5 +1,5 @@
 const net = require('net');
-const { CustomProtocol, KeyHelper } = require('./cryptoProtocol'); // Assuming the provided code is saved in cryptoProtocol.js
+const { CustomProtocol, KeyHelper } = require('./index'); // Assuming the provided code is saved in cryptoProtocol.js
 
 const server = net.createServer((socket) => {
     const protocol = new CustomProtocol();
