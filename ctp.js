@@ -68,6 +68,21 @@ class KeyHelper {
         hmac.update(data);
         return hmac.digest('hex');
     }
+
+    // Calculate MAC (Message Authentication Code)
+    static calculateMAC(key, data) {
+        return KeyHelper.sign(key, data);  // Using EdDSA signing as the MAC calculation
+    }
+
+    // Verify MAC (Message Authentication Code)
+    static verifyMAC(data, key, mac) {
+        return KeyHelper.verify(key, data, mac);  // Verifying the signature as MAC
+    }
+
+    // Get random bytes
+    static getRandomBytes(size) {
+        return crypto.randomBytes(size);
+    }
 }
 
 class CTProtoStore {
@@ -108,6 +123,32 @@ class CTProtoStore {
 
     getSession(address) {
         return this.store.sessions ? this.store.sessions[address] : null;
+    }
+}
+
+class CTProtoAddress {
+    constructor(phoneNumber, deviceId) {
+        if (!phoneNumber || !deviceId) {
+            throw new Error('Both phoneNumber and deviceId are required');
+        }
+
+        this.phoneNumber = phoneNumber;
+        this.deviceId = deviceId;
+    }
+
+    // Returns the unique identifier string for the address
+    toString() {
+        return `${this.phoneNumber}:${this.deviceId}`;
+    }
+
+    // Check if two CTProtoAddresses are the same
+    equals(otherAddress) {
+        return this.phoneNumber === otherAddress.phoneNumber && this.deviceId === otherAddress.deviceId;
+    }
+
+    // Optional method to return a unique hash for the address
+    getAddressHash() {
+        return crypto.createHash('sha256').update(this.toString()).digest('hex');
     }
 }
 
@@ -161,4 +202,4 @@ class CustomProtocol {
     }
 }
 
-module.exports = { CustomProtocol, KeyHelper, CTProtoStore };
+module.exports = { CustomProtocol, KeyHelper, CTProtoStore, CTProtoAddress };
