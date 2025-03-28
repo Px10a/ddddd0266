@@ -28,6 +28,46 @@ class KeyHelper {
     static decompressData(data) {
         return zlib.inflateSync(data);
     }
+
+    // Use EdDSA with Curve25519 for signing
+    static sign(privateKey, data) {
+        const sign = crypto.createSign('eddsa');
+        sign.update(data);
+        sign.end();
+        return sign.sign(privateKey);
+    }
+
+    // Verify EdDSA with Curve25519 signature
+    static verify(publicKey, data, signature) {
+        const verify = crypto.createVerify('eddsa');
+        verify.update(data);
+        verify.end();
+        return verify.verify(publicKey, signature);
+    }
+
+    // Create a new EdDSA private key (Curve25519)
+    static createPrivateKey() {
+        return crypto.generateKeyPairSync('eddsa', { namedCurve: 'x25519' }).privateKey;
+    }
+
+    // Derive EdDSA public key from private key (Curve25519)
+    static createPublicKey(privateKey) {
+        return crypto.createPublicKey(privateKey);
+    }
+
+    // Create HMAC with SHA-256
+    static createHmac(key, data) {
+        const hmac = crypto.createHmac('sha256', key);
+        hmac.update(data);
+        return hmac.digest();
+    }
+
+    // Apply HMAC with SHA-256
+    static applyHmac(key, data) {
+        const hmac = crypto.createHmac('sha256', key);
+        hmac.update(data);
+        return hmac.digest('hex');
+    }
 }
 
 class CTProtoStore {
