@@ -1,8 +1,3 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
-'Security (Build Your Own Botnet)'
-
-# standard library
 import os
 import sys
 import copy
