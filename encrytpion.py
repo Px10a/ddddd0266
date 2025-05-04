@@ -307,6 +307,8 @@ def pad(s, block_size=16):
     padding = (block_size - len(bytes(s, 'utf-8')) % block_size) * chr(0) if sys.version_info[0] > 2 else (block_size - len(bytes(s)) % block_size) * chr(0)
     return s + padding
 
+
+
 def long_to_bytes(n, blocksize=0):
     """
     Convert an integer to a byte string.
@@ -373,29 +375,22 @@ def diffiehellman(connection):
 
 def encrypt_aes(plaintext, key):
     """
-    AES-256-CBC encryption
-
-    `Requires`
-    :param str plaintext:   plain text/data
-    :param str key:         session encryption key
-
+    AES-256-CBC encryption with obfuscation.
     """
     text = pad(plaintext)
     iv = os.urandom(AESModeOfOperationCBC.block_size)
     cipher = AESModeOfOperationCBC(key, iv=iv)
     output = b''.join([cipher.encrypt(text[x:x+AESModeOfOperationCBC.block_size]) for x in xrange(0, len(text), AESModeOfOperationCBC.block_size)])
-    return base64.b64encode(iv + output)
+    encrypted_data = base64.b64encode(iv + output).decode('utf-8')
+    return obfuscate_data(encrypted_data)
+    
 
 def decrypt_aes(ciphertext, key):
     """
-    AES-256-CBC decryption
-
-    `Requires`
-    :param str ciphertext:  encrypted block of data
-    :param str key:         session encryption key
-
+    AES-256-CBC decryption with deobfuscation.
     """
-    ciphertext = base64.b64decode(ciphertext)
+    obfuscated_data = deobfuscate_data(ciphertext)
+    ciphertext = base64.b64decode(obfuscated_data)
     iv = ciphertext[:AESModeOfOperationCBC.block_size]
     ciphertext = ciphertext[len(iv):]
     cipher = AESModeOfOperationCBC(key, iv=iv)
@@ -406,7 +401,7 @@ def decrypt_aes(ciphertext, key):
         except ValueError:
             break
     return output.rstrip(chr(0).encode())
-    
+
 def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr(0)):
     """
     XOR-128 encryption
