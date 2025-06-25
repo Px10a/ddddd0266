@@ -62,7 +62,7 @@ async def ping_peer():
     }
     # Podepiš ping
     token = f"{ping_msg['timestamp']}|{USERNAME}".encode()
-    signature = rsa_key.sign_message(token)
+    signature = rsa_key.sign(token)
     ping_msg["signature"] = [int(x) for x in signature]
 
     user = await bot.fetch_user(FRIEND_USER_ID)
