@@ -804,6 +804,7 @@ class RSAKeyPair:
 import secrets
 import hashlib
 import hmac
+import time
 
 class DH2048:
     """
@@ -812,6 +813,7 @@ class DH2048:
     - Strong public key validation.
     - Secure random private key generation.
     - Uses SHA-256 based HKDF for key derivation.
+    - NOW SUPPORTS KEY REGENERATION ("rekeying") FOR FORWARD SECRECY.
     """
 
     # Full RFC 3526 Group 14 prime (2048-bit)
@@ -826,7 +828,16 @@ class DH2048:
     _p = int(_p_hex, 16)
     _g = 2
 
-    def __init__(self, priv=None):
+    def __init__(self, priv=None, rekey_interval_seconds: int = 900):
+        """
+        priv: Optional private key (int)
+        rekey_interval_seconds: Rekeying interval in seconds (default 15 min)
+        """
+        self.rekey_interval_seconds = rekey_interval_seconds
+        self._last_rekey = time.time()
+        self._init_keys(priv)
+
+    def _init_keys(self, priv=None):
         if priv is None:
             self.priv = self._gen_private_key()
         else:
@@ -834,6 +845,28 @@ class DH2048:
                 raise ValueError("Private key out of range")
             self.priv = priv
         self.pub = pow(self._g, self.priv, self._p)
+        self._last_rekey = time.time()
+
+    def maybe_rekey(self):
+        """
+        Check if a rekey is needed based on interval or explicit request.
+        Rekey if enough time has passed since the last rekey.
+        """
+        now = time.time()
+        if now - self._last_rekey >= self.rekey_interval_seconds:
+            self.rekey()
+            return True
+        return False
+
+    def rekey(self):
+        """
+        Forcefully regenerate private/public key (DH rekeying).
+        """
+        self._init_keys()
+        # Optionally: Notify peer about new public key to support rekey protocol.
+        # In practice, you would have messaging to share new self.pub.
+        # e.g. send_new_public_key(self.pub)
+        # For API, just set the new pub.
 
     @classmethod
     def _gen_private_key(cls):
