@@ -539,6 +539,52 @@ class AESModeOfOperationOFB(AESStreamModeOfOperation):
 
 
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+class AESModeOfOperationGCM:
+    """
+    AES-256-GCM authenticated encryption using cryptography.io
+    """
+    name = "Galois/Counter Mode (GCM)"
+
+    def __init__(self, key, nonce=None):
+        if len(key) != 32:
+            raise ValueError("Key for AES-256-GCM must be 32 bytes")
+        self.key = key
+        if nonce is None:
+            self.nonce = os.urandom(12)
+        else:
+            if len(nonce) != 12:
+                raise ValueError("GCM nonce must be 12 bytes")
+            self.nonce = nonce
+        self.aesgcm = AESGCM(self.key)
+
+    def encrypt(self, plaintext: bytes, associated_data: bytes = None) -> Tuple[bytes, bytes, bytes]:
+        """
+        Encrypts the plaintext.
+        Returns (nonce, ciphertext, tag)
+        """
+        if associated_data is None:
+            associated_data = b""
+        # AESGCM expects plaintext and associated_data as bytes
+        ciphertext = self.aesgcm.encrypt(self.nonce, plaintext, associated_data)
+        # cryptography AESGCM returns ciphertext+tag, tag is last 16 bytes
+        tag = ciphertext[-16:]
+        ct = ciphertext[:-16]
+        return self.nonce, ct, tag
+
+    def decrypt(self, nonce: bytes, ciphertext: bytes, tag: bytes, associated_data: bytes = None) -> bytes:
+        """
+        Decrypts the ciphertext.
+        Returns plaintext.
+        """
+        if associated_data is None:
+            associated_data = b""
+        full_ciphertext = ciphertext + tag
+        return self.aesgcm.decrypt(nonce, full_ciphertext, associated_data)
+
+
+
 class AESModeOfOperationCTR(AESStreamModeOfOperation):
     '''AES Counter Mode of Operation.
 
@@ -600,6 +646,7 @@ AESModesOfOperation = dict(
     cbc = AESModeOfOperationCBC,
     cfb = AESModeOfOperationCFB,
     ecb = AESModeOfOperationECB,
+    gcm = AESModeOfOperationGCM,
     ofb = AESModeOfOperationOFB,
 )
 
